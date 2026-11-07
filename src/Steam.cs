@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -41,7 +40,8 @@ internal static unsafe class Steam
     [DllImport("kernel32", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandleW(string name);
 
     /// .NET only looks for "steam_api64" next to the game and in the plugin's folder, but the game keeps it in
-    /// Flipping is Hard_Data\Plugins\x86_64. Point our imports at the copy the game already loaded (or that file).
+    /// Flipping is Hard_Data\Plugins\x86_64. Point our imports at the copy the game already loaded. Never load it
+    /// ourselves: Steam must only be touched after the game has started it (see Ready).
     internal static void Resolve()
     {
         NativeLibrary.SetDllImportResolver(typeof(Steam).Assembly, Find);
@@ -50,17 +50,16 @@ internal static unsafe class Steam
     static IntPtr Find(string name, Assembly assembly, DllImportSearchPath? path)
     {
         if (name != Lib) return IntPtr.Zero;
-        var loaded = GetModuleHandleW("steam_api64.dll");
-        if (loaded != IntPtr.Zero) return loaded;
-        var file = Path.Combine(BepInEx.Paths.GameRootPath, "Flipping is Hard_Data", "Plugins", "x86_64", "steam_api64.dll");
-        return File.Exists(file) && NativeLibrary.TryLoad(file, out var h) ? h : IntPtr.Zero;
+        return GetModuleHandleW("steam_api64.dll");
     }
 
-    /// False until the game's Steam is up (main menu onwards).
+    /// False until the game's Steam is up (main menu onwards). Calling into Steam before the game's own SteamAPI.Init
+    /// can take the game down while it starts, so this waits for the game's SteamManager to say it's initialized, and
+    /// for steam_api64 to be loaded by the game.
     internal static bool Ready()
     {
         if (Me != 0) return true;
-        if (Off) return false;
+        if (Off || !GameSteamUp() || GetModuleHandleW("steam_api64.dll") == IntPtr.Zero) return false;
         messages = SteamAPI_SteamNetworkingMessages_SteamAPI_v002();
         matchmaking = SteamAPI_SteamMatchmaking_v009();
         friends = SteamAPI_SteamFriends_v017();
@@ -69,6 +68,12 @@ internal static unsafe class Steam
         Me = SteamAPI_ISteamUser_GetSteamID(user);
         if (Me != 0) Plugin.Logger.LogInfo($"Steam ready: {Name(Me)}");
         return Me != 0;
+    }
+
+    static bool GameSteamUp()
+    {
+        try { return EHS.Steam.SteamManagerBase.Initialized; }
+        catch { return false; }
     }
 
     internal static List<ulong> LobbyMembers(ulong lobby)
