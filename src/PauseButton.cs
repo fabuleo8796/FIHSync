@@ -63,6 +63,32 @@ internal static class PauseButton
         return found != null && found.Length > 0 ? found[0].TryCast<T>() : null;
     }
 
+    /// In a layout group the copy just goes above the original. The main menu places its buttons by hand, so there the
+    /// copy goes one step below the original, the same step as between the original and the button above it.
+    static void Place(GameObject source, GameObject copy)
+    {
+        var parent = source.transform.parent;
+        int index = source.transform.GetSiblingIndex();
+        if (parent != null && parent.GetComponent<LayoutGroup>() != null)
+        {
+            copy.transform.SetSiblingIndex(index);
+            return;
+        }
+        var from = source.transform.TryCast<RectTransform>();
+        var to = copy.transform.TryCast<RectTransform>();
+        if (from == null || to == null) return;
+        float dx = 0f, dy = -120f;
+        var above = index > 0 ? parent.GetChild(index - 1).TryCast<RectTransform>() : null;
+        if (above != null)
+        {
+            float sx = from.anchoredPosition.x - above.anchoredPosition.x, sy = from.anchoredPosition.y - above.anchoredPosition.y;
+            if (sy < -20f && sy > -400f) { dx = sx; dy = sy; }
+        }
+        var p = from.anchoredPosition;
+        to.anchoredPosition = new Vector2(p.x + dx, p.y + dy);
+        copy.transform.SetSiblingIndex(index + 1);
+    }
+
     static void Add(Slot s, IntPtr owner, Button original)
     {
         try
@@ -71,7 +97,7 @@ internal static class PauseButton
             var source = original.gameObject;
             s.Button = Object.Instantiate(source.Cast<Object>(), source.transform.parent).Cast<GameObject>(); // the real (not rebuilt) overload
             s.Button.name = "FIHSync Mod sharing";
-            s.Button.transform.SetSiblingIndex(source.transform.GetSiblingIndex());
+            Place(source, s.Button);
             foreach (var loc in s.Button.GetComponentsInChildren<EHS.LocalizedUIText>(true)) Object.Destroy(loc);
             var b = s.Button.GetComponent<Button>();
             b.onClick.RemoveAllListeners();
