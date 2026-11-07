@@ -5,6 +5,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
+using Il2CppInterop.Runtime.Attributes;
 using Il2CppInterop.Runtime.Injection;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -49,6 +50,7 @@ public class Plugin : BasePlugin
         Blocked.SettingChanged += Recheck;
         VideosFrom.SettingChanged += Reload;
 
+        Steam.Resolve();
         ClassInjector.RegisterTypeInIl2Cpp<SyncDriver>();
         var host = new GameObject("FIHSync");
         Object.DontDestroyOnLoad(host);
@@ -79,20 +81,22 @@ public class SyncDriver : MonoBehaviour
 
     int errors;
 
+    [HideFromIl2Cpp]
+    void Run(Action tick, string what)
+    {
+        try { tick(); }
+        catch (Exception e) { if (errors++ < 20) Plugin.Logger.LogError($"{what}: {e}"); }
+    }
+
     void Update()
     {
         try
         {
-            Share.Tick();
-            Sign.Tick();
-            PauseButton.Tick();
-            SharePanel.Tick();
+            Run(Share.Tick, "sharing");
+            Run(Sign.Tick, "sign");
+            Run(PauseButton.Tick, "menu button");
+            Run(SharePanel.Tick, "panel");
             Ui.Tick();
-        }
-        catch (DllNotFoundException e)
-        {
-            if (errors++ == 0) Plugin.Logger.LogError("Steam isn't reachable, FIH Sync is off: " + e.Message);
-            enabled = false;
         }
         catch (Exception e)
         {

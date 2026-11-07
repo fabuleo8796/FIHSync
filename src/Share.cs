@@ -155,7 +155,13 @@ public static class Share
 
     internal static void Tick()
     {
-        if (!Steam.Ready()) return;
+        try { if (!Steam.Ready()) return; }
+        catch (Exception e) when (e is DllNotFoundException || e is EntryPointNotFoundException)
+        {
+            Steam.Off = true;
+            Plugin.Logger.LogError("Steam isn't reachable, sharing is off: " + e.Message);
+            return;
+        }
         float now = Time.unscaledTime;
         if (now >= nextVersions) { nextVersions = now + 1f; CheckVersions(); }
         if (now >= nextLobby || changed) { nextLobby = now + 2f; Lobby(now); changed = false; }

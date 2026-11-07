@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace FIHSync;
@@ -34,11 +36,31 @@ internal static unsafe class Steam
 
     static IntPtr messages, matchmaking, friends;
     internal static ulong Me;
+    internal static bool Off; // steam_api64 couldn't be reached: sharing stays off, the menus still work
+
+    [DllImport("kernel32", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandleW(string name);
+
+    /// .NET only looks for "steam_api64" next to the game and in the plugin's folder, but the game keeps it in
+    /// Flipping is Hard_Data\Plugins\x86_64. Point our imports at the copy the game already loaded (or that file).
+    internal static void Resolve()
+    {
+        NativeLibrary.SetDllImportResolver(typeof(Steam).Assembly, Find);
+    }
+
+    static IntPtr Find(string name, Assembly assembly, DllImportSearchPath? path)
+    {
+        if (name != Lib) return IntPtr.Zero;
+        var loaded = GetModuleHandleW("steam_api64.dll");
+        if (loaded != IntPtr.Zero) return loaded;
+        var file = Path.Combine(BepInEx.Paths.GameRootPath, "Flipping is Hard_Data", "Plugins", "x86_64", "steam_api64.dll");
+        return File.Exists(file) && NativeLibrary.TryLoad(file, out var h) ? h : IntPtr.Zero;
+    }
 
     /// False until the game's Steam is up (main menu onwards).
     internal static bool Ready()
     {
         if (Me != 0) return true;
+        if (Off) return false;
         messages = SteamAPI_SteamNetworkingMessages_SteamAPI_v002();
         matchmaking = SteamAPI_SteamMatchmaking_v009();
         friends = SteamAPI_SteamFriends_v017();
