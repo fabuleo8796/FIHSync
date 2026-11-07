@@ -24,12 +24,12 @@ public class Plugin : BasePlugin
 
     internal enum Who { Everyone, FriendsOnly, Nobody }
 
-    internal static ConfigEntry<Who> ShowFrom;
-    internal static ConfigEntry<bool> ShareMine, ShowSign;
+    internal static ConfigEntry<Who> ShowFrom, VideosFrom;
+    internal static ConfigEntry<bool> ShareMine, ShowSign, LagShield;
     internal static ConfigEntry<int> MaxMB;
-    internal static ConfigEntry<double> CacheDays;
+    internal static ConfigEntry<double> CacheDays, MaxCostMs;
     internal static ConfigEntry<string> Blocked;
-    internal static ConfigEntry<Key> SkipKey;
+    internal static ConfigEntry<Key> SkipKey, PanelKey;
 
     public override void Load()
     {
@@ -37,12 +37,17 @@ public class Plugin : BasePlugin
         ShowFrom = Config.Bind("Sharing", "ShowFrom", Who.Everyone, "Whose customizations you see: Everyone, FriendsOnly (your Steam friends) or Nobody.");
         ShareMine = Config.Bind("Sharing", "ShareMine", true, "Let other modded players see your customizations.");
         MaxMB = Config.Bind("Sharing", "MaxMB", 30, "Biggest look (in MB) you download from another player. Accessories with videos can be big.");
+        VideosFrom = Config.Bind("Sharing", "VideosFrom", Who.FriendsOnly, "Whose video textures play here: Everyone, FriendsOnly or Nobody (videos are the one thing Windows itself decodes).");
+        LagShield = Config.Bind("Sharing", "LagShield", true, "Hide a player's stuff when it keeps costing too much frame time.");
+        MaxCostMs = Config.Bind("Sharing", "LagShieldMs", 1.5, "The lag shield's limit: milliseconds per frame for one player's stuff.");
+        PanelKey = Config.Bind("Keys", "Panel", Key.F8, "Opens the Mod sharing panel (it's also a button in the pause menu).");
         Blocked = Config.Bind("Sharing", "Blocked", "", "Steam IDs (numbers, separated by commas) whose customizations you never see. Their IDs are in LogOutput.log.");
         CacheDays = Config.Bind("Cache", "Days", 3.0, "Other players' files delete themselves after this many days without being used.");
         ShowSign = Config.Bind("Sign", "Show", true, "Show the \"Loading mod textures\" sign while other players' files come in.");
         SkipKey = Config.Bind("Sign", "SkipKey", Key.F7, "Hides the loading sign (the default look shows until the files arrive).");
         ShowFrom.SettingChanged += Recheck;
         Blocked.SettingChanged += Recheck;
+        VideosFrom.SettingChanged += Reload;
 
         ClassInjector.RegisterTypeInIl2Cpp<SyncDriver>();
         var host = new GameObject("FIHSync");
@@ -54,6 +59,14 @@ public class Plugin : BasePlugin
     }
 
     static void Recheck(object sender, EventArgs e) => Share.Recheck();
+    static void Reload(object sender, EventArgs e) => Share.Reload();
+
+    internal static void Block(ulong id, bool on)
+    {
+        var set = BlockedSet();
+        if (on) set.Add(id.ToString()); else set.Remove(id.ToString());
+        Blocked.Value = string.Join(",", set); // SettingChanged re-checks everyone
+    }
 
     internal static string ConfigFolder => Path.Combine(Paths.ConfigPath, "FIHSync");
 
@@ -72,6 +85,8 @@ public class SyncDriver : MonoBehaviour
         {
             Share.Tick();
             Sign.Tick();
+            PauseButton.Tick();
+            SharePanel.Tick();
             Ui.Tick();
         }
         catch (DllNotFoundException e)

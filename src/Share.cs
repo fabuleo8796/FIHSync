@@ -54,6 +54,28 @@ public static class Share
         return null;
     }
 
+    /// Whether this player's videos may play here (the "Videos from" setting: friends only by default, because a video is
+    /// the one thing Windows itself has to decode).
+    public static bool VideosAllowed(int ownerId)
+    {
+        var p = peers.Values.FirstOrDefault(x => x.OwnerId == ownerId);
+        if (p == null) return false;
+        return Plugin.VideosFrom.Value switch
+        {
+            Plugin.Who.Nobody => false,
+            Plugin.Who.FriendsOnly => Steam.IsFriend(p.Id),
+            _ => true,
+        };
+    }
+
+    /// Mods report what drawing this player's stuff cost this frame (milliseconds). With the lag shield on, a player
+    /// whose stuff keeps costing too much gets hidden ("too heavy"), until "Show anyway" in the Mod sharing panel.
+    public static void ReportCost(int ownerId, double ms)
+    {
+        var p = peers.Values.FirstOrDefault(x => x.OwnerId == ownerId);
+        if (p != null) p.CostMs += ms;
+    }
+
     // ------------------------------------------------------------------ the network side
 
     sealed class Peer
@@ -64,6 +86,48 @@ public static class Share
         public float LastHeard, LastHelloSent = -99f;
         public readonly Dictionary<string, (string hash, int size)> Offers = new();
         public readonly Dictionary<string, string> Shown = new(); // key -> hash handed to the mod
+        public double CostMs;
+        public int CostFrames;
+        public bool TooHeavy, ShowAnyway;
+    }
+
+    /// For the Mod sharing panel.
+    internal sealed class PeerInfo
+    {
+        public ulong Id;
+        public string Name = "", What = "";
+        public bool Hidden, Blocked, TooHeavy, Loading;
+    }
+
+    internal static List<PeerInfo> Peers()
+    {
+        var blocked = Plugin.BlockedSet();
+        return peers.Values.Where(p => p.Name != "").OrderBy(p => p.Name).Select(p => new PeerInfo
+        {
+            Id = p.Id,
+            Name = p.Name,
+            What = p.Offers.Count == 0 ? "nothing shared" : string.Join(", ", p.Offers.Keys),
+            Hidden = hidden.Contains(p.Id),
+            Blocked = blocked.Contains(p.Id.ToString()),
+            TooHeavy = p.TooHeavy && !p.ShowAnyway,
+            Loading = downloads.Values.Any(d => d.From == p.Id),
+        }).ToList();
+    }
+
+    static readonly HashSet<ulong> hidden = new(); // "Hide" in the panel: this session only
+
+    internal static void SetHidden(ulong id, bool on)
+    {
+        if (on) hidden.Add(id); else hidden.Remove(id);
+        Reload();
+    }
+
+    internal static void ShowAnyway(ulong id)
+    {
+        if (!peers.TryGetValue(id, out var p)) return;
+        p.ShowAnyway = true;
+        p.TooHeavy = false;
+        Reload();
     }
 
     sealed class Download
@@ -82,7 +146,7 @@ public static class Share
     static readonly Dictionary<string, Download> downloads = new(); // by hash
     static readonly Queue<(ulong to, string key, string hash, int index)> outbox = new();
     static ulong lobby;
-    static float nextLobby, nextVersions, nextSweep;
+    static float nextLobby, nextVersions, nextSweep, nextCost;
     static bool changed;
 
     /// For the loading sign: looks still coming in, and how many came in since the sign showed up.
@@ -101,6 +165,8 @@ public static class Share
             catch (Exception e) { Plugin.Logger.LogWarning($"bad message from {from}: {e.Message}"); }
         }
         SendChunks();
+        foreach (var p in peers.Values) if (p.Shown.Count > 0) p.CostFrames++;
+        if (now >= nextCost) { nextCost = now + 2f; LagShield(); }
         foreach (var d in downloads.Values.Where(d => now - d.LastProgress > 20f).ToList())
         {
             Plugin.Logger.LogWarning($"'{d.Key}' from {Name(d.From)} stalled, dropped");
@@ -110,6 +176,31 @@ public static class Share
     }
 
     static string Name(ulong id) => peers.TryGetValue(id, out var p) && p.Name != "" ? p.Name : id.ToString();
+
+    /// Every 2 s: a player whose stuff averaged more than LagShieldMs a frame gets hidden.
+    static void LagShield()
+    {
+        foreach (var p in peers.Values)
+        {
+            double avg = p.CostFrames > 0 ? p.CostMs / p.CostFrames : 0;
+            p.CostMs = 0;
+            p.CostFrames = 0;
+            if (!Plugin.LagShield.Value || p.ShowAnyway || p.TooHeavy || avg <= Plugin.MaxCostMs.Value) continue;
+            p.TooHeavy = true;
+            Plugin.Logger.LogWarning($"{p.Name}'s stuff costs {avg:0.00} ms a frame: hidden by the lag shield");
+            foreach (var key in p.Shown.Keys.ToList()) HideFor(p, key);
+        }
+    }
+
+    /// Hides and re-shows everyone's looks (a setting changed that mods read when a look arrives, like videos).
+    internal static void Reload()
+    {
+        foreach (var p in peers.Values)
+        {
+            foreach (var key in p.Shown.Keys.ToList()) HideFor(p, key);
+            Update(p);
+        }
+    }
 
     /// Asks each mod whether its look changed, and if so takes the new bytes.
     static void CheckVersions()
@@ -217,7 +308,7 @@ public static class Share
             {
                 string key = r.ReadString(), hash = r.ReadString();
                 int size = r.ReadInt32();
-                p.Offers[key] = (hash, size);
+                if (size > 0 && hash.Length == 32 && key.Length <= 40) p.Offers[key] = (hash, size);
             }
             if (now - p.LastHelloSent > 1f && p.LastHelloSent < 0f) { p.LastHelloSent = now; SendHello(from); } // a newcomer: answer right away
             Update(p);
@@ -236,6 +327,8 @@ public static class Share
             int index = r.ReadInt32(), count = r.ReadInt32();
             var bytes = r.ReadBytes(r.ReadInt32());
             if (!downloads.TryGetValue(hash, out var d) || d.From != from || count != d.Chunks.Length || index < 0 || index >= count || d.Chunks[index] != null) return;
+            int expected = index < count - 1 ? ChunkSize : d.Size - (count - 1) * ChunkSize;
+            if (bytes.Length != expected) { Plugin.Logger.LogWarning($"'{d.Key}' from {p.Name}: wrong piece size, dropped"); downloads.Remove(hash); return; }
             d.Chunks[index] = bytes;
             d.Got++;
             d.LastProgress = now;
@@ -286,7 +379,8 @@ public static class Share
 
     static bool Allowed(ulong id)
     {
-        if (Plugin.BlockedSet().Contains(id.ToString())) return false;
+        if (Plugin.BlockedSet().Contains(id.ToString()) || hidden.Contains(id)) return false;
+        if (peers.TryGetValue(id, out var p) && p.TooHeavy && !p.ShowAnyway) return false;
         return Plugin.ShowFrom.Value switch
         {
             Plugin.Who.Nobody => false,
