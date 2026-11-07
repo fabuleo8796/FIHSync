@@ -1,0 +1,75 @@
+# FIH Sync (0.1.0, test build)
+
+Modded players see each other's customizations in Flipping is Hard, automatically. A Flipping is Hard mod (BepInEx 6
+IL2CPP) by Fabuleo8796.
+
+Works with:
+
+| Mod | What other players see |
+|---|---|
+| Flippy Auras 0.2.0+ | your auras around your Flippy |
+| Body Accessories 0.2.0+ | everything you wear, animations and videos too |
+
+Unmodded players don't notice anything, and you see them as normal.
+
+## How it works
+
+1. In a lobby, FIH Sync says hello to the other members over **Steam peer-to-peer** (relayed by Steam, no IPs, no
+   server). The ones that also run it answer.
+2. Each of you sends what you wear. Each look is downloaded **once** and cached, so meeting again is instant.
+3. Change something mid-game (a new aura, a new export from Blender) and it re-sends by itself.
+4. While other players' files are coming in, a small **"Loading mod textures… 2 of 5"** sign shows top right.
+   **Skip** (or F7) hides it: those players look default until their files land.
+5. Files from other players **delete themselves after 3 days** without being used.
+
+It never touches the game's own netcode (FishNet): it's a separate Steam channel next to it.
+
+## Settings
+
+`BepInEx\config\com.fabuleo8796.fihsync.cfg`:
+
+| Setting | Default | |
+|---|---|---|
+| `ShowFrom` | Everyone | `Everyone`, `FriendsOnly` (your Steam friends) or `Nobody` |
+| `ShareMine` | true | let others see yours |
+| `MaxMB` | 30 | biggest look you download from someone (videos can be big) |
+| `Blocked` | | Steam IDs you never see (they're in `LogOutput.log`) |
+| `Days` | 3 | how long other players' files stay |
+| `Show` / `SkipKey` | true / F7 | the loading sign |
+
+The cache is `BepInEx\cache\FIHSync\`.
+
+## Install
+
+Extract the zip into the game folder: `BepInEx\plugins\FIHSync\FIHSync.dll`. Both players need it, plus the mods
+whose looks they want to share.
+
+## For modders
+
+Register a key with five callbacks (all on the main thread):
+
+```csharp
+FIHSync.Share.Register("mymod",
+    version: () => "changes when my look changes",   // asked once a second; null = nothing to share
+    data: () => bytes,                               // my look
+    received: (ownerId, bytes, folder) => { ... },   // another player's look; folder = scratch space for files
+    gone: ownerId => { ... });                       // they left, switched it off, or got blocked
+var player = FIHSync.Share.FindPlayer(ownerId);      // their EHS.PlayerRef (null while not spawned)
+```
+
+Use a soft `BepInDependency("com.fabuleo8796.fihsync")` and keep the calls in a `NoInlining` method inside a
+try/catch, so your mod still runs without FIH Sync.
+
+## Layout
+
+| Path | What |
+|---|---|
+| `src/Steam.cs` | Steam P2P through the game's `steam_api64.dll` (flat API: ISteamNetworkingMessages, lobby members, friends) |
+| `src/Share.cs` | The API, hello / want / chunk messages, the cache and expiry |
+| `src/Sign.cs` | The loading sign |
+| `src/Plugin.cs` | Load, config |
+| `src/Ui.cs` | UI pieces (Geist font) |
+
+Build like Body Accessories: `python tools\make_rsp.py fihsync bin\FIHSync.dll src`, then Unity's bundled `csc`.
+
+MIT license. Geist font © Vercel, SIL Open Font License (`src/Resources/OFL-Geist.txt`).
