@@ -24,9 +24,9 @@ Unmodded players don't notice anything, and you see them as normal.
 
 It never touches the game's own netcode (FishNet): it's a separate Steam channel next to it.
 
-## Mod sharing (pause menu)
+## Mod sharing (main menu and pause menu)
 
-Press Esc: there's a new **Mod sharing** button (or press **F8**).
+There's a new **Mod sharing** button in the **main menu** and in the pause menu (or press **F8**).
 
 - **See other players' stuff from:** Everyone, Friends only or Nobody.
 - **Videos from:** Everyone, Friends only (the default) or Nobody.
@@ -98,7 +98,7 @@ try/catch, so your mod still runs without FIH Sync.
 | `src/Share.cs` | The API, hello / want / chunk messages, the cache and expiry |
 | `src/Sign.cs` | The loading sign |
 | `src/SharePanel.cs` | The Mod sharing panel |
-| `src/PauseButton.cs` | Its button in the game's pause menu |
+| `src/PauseButton.cs` | Its buttons in the main menu and the pause menu |
 | `src/Plugin.cs` | Load, config |
 | `src/Ui.cs` | UI pieces (Geist font) |
 

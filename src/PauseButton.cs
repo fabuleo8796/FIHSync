@@ -8,58 +8,83 @@ using Object = UnityEngine.Object;
 
 namespace FIHSync;
 
-/// A "Mod sharing" button in the game's own pause menu: a copy of its Save and exit button (so it looks native), put
-/// just above it, with the game's text and click handlers taken off. It opens the Mod sharing panel.
+/// "Mod sharing" buttons in the game's own menus: the main menu (a copy of its Exit game button) and the pause menu
+/// (a copy of Save and exit), so they look native. Each is put just above the button it copies, with the game's text
+/// and click handlers taken off, and opens the Mod sharing panel.
 internal static class PauseButton
 {
     const string Text = "Mod sharing";
-    static GameObject button;
-    static TMP_Text label;
-    static IntPtr controller;
-    static float nextLook;
-    static bool failed;
 
-    /// Whether the pause menu (with our button) is on screen.
-    internal static bool MenuOpen => button != null && button.activeInHierarchy;
+    sealed class Slot
+    {
+        public string Where = "";
+        public GameObject Button;
+        public TMP_Text Label;
+        public IntPtr Owner;
+        public bool Failed;
+    }
+
+    static readonly Slot main = new() { Where = "main menu" }, pause = new() { Where = "pause menu" };
+    static float nextLook;
+
+    /// Whether a menu with our button is on screen.
+    internal static bool MenuOpen => Shown(main) || Shown(pause);
+
+    static bool Shown(Slot s) => s.Button != null && s.Button.activeInHierarchy;
 
     internal static void Tick()
     {
-        if (button == null && !failed && Time.unscaledTime >= nextLook)
+        if (Time.unscaledTime >= nextLook && (main.Button == null || pause.Button == null))
         {
             nextLook = Time.unscaledTime + 2f;
-            Add();
+            if (main.Button == null && !main.Failed)
+            {
+                var m = Find<EHS.MainMenu.MainMenuManager>();
+                if (m != null && m.Pointer != main.Owner && m.exitGameButton != null) Add(main, m.Pointer, m.exitGameButton);
+            }
+            if (pause.Button == null && !pause.Failed)
+            {
+                var p = Find<EHS.GamePauseMenuController>();
+                if (p != null && p.Pointer != pause.Owner && p.saveAndExitButton != null) Add(pause, p.Pointer, p.saveAndExitButton);
+            }
         }
-        if (label != null && MenuOpen && label.text != Text) label.text = Text; // the game's localization may write it back
+        Relabel(main);
+        Relabel(pause);
     }
 
-    static void Add()
+    static void Relabel(Slot s)
     {
-        var found = Object.FindObjectsOfType(Il2CppType.Of<EHS.GamePauseMenuController>());
-        if (found == null || found.Length == 0) return;
-        var menu = found[0].TryCast<EHS.GamePauseMenuController>();
-        if (menu == null || menu.Pointer == controller) return;
-        var original = menu.saveAndExitButton;
-        if (original == null) return;
+        if (s.Label != null && Shown(s) && s.Label.text != Text) s.Label.text = Text; // the game's localization may write it back
+    }
+
+    static T Find<T>() where T : Il2CppSystem.Object
+    {
+        var found = Object.FindObjectsOfType(Il2CppType.Of<T>());
+        return found != null && found.Length > 0 ? found[0].TryCast<T>() : null;
+    }
+
+    static void Add(Slot s, IntPtr owner, Button original)
+    {
         try
         {
-            controller = menu.Pointer;
+            s.Owner = owner;
             var source = original.gameObject;
-            button = Object.Instantiate(source.Cast<Object>(), source.transform.parent).Cast<GameObject>(); // the real (not rebuilt) overload
-            button.name = "FIHSync Mod sharing";
-            button.transform.SetSiblingIndex(source.transform.GetSiblingIndex());
-            foreach (var loc in button.GetComponentsInChildren<EHS.LocalizedUIText>(true)) Object.Destroy(loc);
-            var b = button.GetComponent<Button>();
+            s.Button = Object.Instantiate(source.Cast<Object>(), source.transform.parent).Cast<GameObject>(); // the real (not rebuilt) overload
+            s.Button.name = "FIHSync Mod sharing";
+            s.Button.transform.SetSiblingIndex(source.transform.GetSiblingIndex());
+            foreach (var loc in s.Button.GetComponentsInChildren<EHS.LocalizedUIText>(true)) Object.Destroy(loc);
+            var b = s.Button.GetComponent<Button>();
             b.onClick.RemoveAllListeners();
             for (int i = 0; i < b.onClick.GetPersistentEventCount(); i++) b.onClick.SetPersistentListenerState(i, UnityEventCallState.Off);
             b.onClick.AddListener((UnityAction)new Action(() => Ui.Safe(() => SharePanel.Open(true))));
-            label = button.GetComponentInChildren<TMP_Text>(true);
-            if (label != null) label.text = Text;
-            Plugin.Logger.LogInfo("added the Mod sharing button to the pause menu");
+            s.Label = s.Button.GetComponentInChildren<TMP_Text>(true);
+            if (s.Label != null) s.Label.text = Text;
+            Plugin.Logger.LogInfo($"added the Mod sharing button to the {s.Where}");
         }
         catch (Exception e)
         {
-            failed = true;
-            Plugin.Logger.LogWarning($"couldn't add the pause menu button ({e.Message}): {Plugin.PanelKey.Value} opens Mod sharing");
+            s.Failed = true;
+            Plugin.Logger.LogWarning($"couldn't add the Mod sharing button to the {s.Where} ({e.Message}): {Plugin.PanelKey.Value} opens it");
         }
     }
 }
