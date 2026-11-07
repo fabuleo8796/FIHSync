@@ -107,31 +107,31 @@ internal static class PauseButton
             var source = original.transform.TryCast<RectTransform>();
             var parent = source.parent;
             s.Original = source;
-            s.LaidOut = parent != null && parent.GetComponent<LayoutGroup>() != null;
+            s.LaidOut = false; // the main menu's column has a layout group, but the game moves its buttons itself: follow instead
 
+            // the game's own button font (and its outline material), on our green pill
+            var gameLabel = source.GetComponentInChildren<TMP_Text>(true);
             float h = Mathf.Clamp(source.rect.height * 0.8f, 40f, 90f);
             s.Rect = Ui.Node(parent, "FIHSync Mod sharing");
             s.Button = s.Rect.gameObject;
+            s.Button.AddComponent<LayoutElement>().ignoreLayout = true;
             s.Rect.anchorMin = s.Rect.anchorMax = s.Rect.pivot = new Vector2(0.5f, 0.5f);
-            s.Rect.sizeDelta = new Vector2(h * 4.6f, h);
             var back = Ui.Fill(s.Rect, Ui.rounded, Ui.Accent, true);
-            var label = Ui.Label(s.Rect, Text, Ui.semiBold, h * 0.44f, Ui.AccentText, 0f, 0f, h * 4.6f, h, TextAlignmentOptions.Center);
-            label.characterSpacing = 4f;
+            var label = Ui.Label(s.Rect, Text, Ui.semiBold, h * 0.5f, Ui.AccentText, 0f, 0f, h * 6f, h, TextAlignmentOptions.Center);
+            if (gameLabel != null && gameLabel.font != null)
+            {
+                label.font = gameLabel.font;
+                label.fontSharedMaterial = gameLabel.fontSharedMaterial;
+                label.fontSize = Mathf.Min(gameLabel.fontSize * 0.8f, h * 0.7f);
+            }
+            float w = label.GetPreferredValues(Text).x + h * 1.2f;
+            s.Rect.sizeDelta = new Vector2(w, h);
+            label.rectTransform.sizeDelta = new Vector2(w, h);
             Ui.Click(s.Button, back, () => SharePanel.Open(true));
-            if (s.LaidOut)
-            {
-                var le = s.Button.AddComponent<LayoutElement>();
-                le.preferredHeight = h;
-                le.preferredWidth = h * 4.6f;
-                s.Rect.SetSiblingIndex(source.GetSiblingIndex() + 1);
-            }
-            else
-            {
-                s.Rect.SetAsLastSibling(); // drawn over the menu's backgrounds
-                s.Above = FindAbove(source);
-            }
+            s.Rect.SetAsLastSibling(); // drawn over the menu's backgrounds
+            s.Above = FindAbove(source);
             Follow(s);
-            Plugin.Logger.LogInfo($"added the Mod sharing button to the {s.Where}, {h:0} tall, original {source.rect.width:0}x{source.rect.height:0} ({(s.LaidOut ? "in its layout" : s.Above != null ? $"below {source.name}, step from {s.Above.name}" : $"below {source.name}")})");
+            Plugin.Logger.LogInfo($"added the Mod sharing button to the {s.Where}, {w:0}x{h:0}, font {(gameLabel != null && gameLabel.font != null ? gameLabel.font.name : "Geist")}, below {source.name}{(s.Above != null ? $", step from {s.Above.name}" : "")}");
         }
         catch (Exception e)
         {
