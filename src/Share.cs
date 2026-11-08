@@ -73,7 +73,7 @@ public static class Share
     public static void ReportCost(int ownerId, double ms)
     {
         var p = peers.Values.FirstOrDefault(x => x.OwnerId == ownerId);
-        if (p != null) p.CostMs += ms;
+        if (p != null) p.CostMs += Math.Min(ms, 4.0); // a one-off build spike mustn't trip the lag shield
     }
 
     // ------------------------------------------------------------------ the network side
@@ -137,10 +137,11 @@ public static class Share
         public byte[][] Chunks;
         public int Got, Size;
         public float LastProgress;
+        public bool Sign; // counts on the loading sign
     }
 
     const byte Hello = 1, Want = 2, Chunk = 3;
-    const int ChunkSize = 96 * 1024, SendBudget = 384 * 1024; // bytes sent per frame at most
+    const int ChunkSize = 96 * 1024, SendBudget = 192 * 1024; // bytes sent per frame at most
 
     static readonly Dictionary<ulong, Peer> peers = new();
     static readonly Dictionary<string, Download> downloads = new(); // by hash
@@ -150,7 +151,8 @@ public static class Share
     static bool changed;
 
     /// For the loading sign: looks still coming in, and how many came in since the sign showed up.
-    internal static int Pending => downloads.Count;
+    internal static int Pending => downloads.Values.Count(d => d.Sign);
+    static float joinedAt;
     internal static int DownloadedSinceJoin;
 
     internal static void Tick()
@@ -251,6 +253,7 @@ public static class Share
             downloads.Clear();
             outbox.Clear();
             DownloadedSinceJoin = 0;
+            joinedAt = now;
             Sign.Reset();
         }
         if (lobby == 0) return;
@@ -345,7 +348,7 @@ public static class Share
             foreach (var c in d.Chunks) { Buffer.BlockCopy(c, 0, all, at, c.Length); at += c.Length; }
             if (Convert.ToHexString(SHA256.HashData(all)).Substring(0, 32) != hash) { Plugin.Logger.LogWarning($"'{d.Key}' from {p.Name}: damaged, dropped"); return; }
             Cache.Put(hash, all);
-            DownloadedSinceJoin++;
+            if (d.Sign) DownloadedSinceJoin++;
             Plugin.Logger.LogInfo($"got '{d.Key}' from {p.Name} ({all.Length / 1024.0:0.#} KB)");
             Update(p);
         }
@@ -374,7 +377,11 @@ public static class Share
             if (size > Plugin.MaxMB.Value * 1024 * 1024) { Plugin.Logger.LogInfo($"'{key}' of {p.Name} skipped: {size / 1048576.0:0.#} MB is over the {Plugin.MaxMB.Value} MB limit"); continue; }
             if (downloads.ContainsKey(hash)) continue;
             int count = Math.Max(1, (size + ChunkSize - 1) / ChunkSize);
-            downloads[hash] = new Download { From = p.Id, Key = key, Hash = hash, Size = size, Chunks = new byte[count][], LastProgress = Time.unscaledTime };
+            downloads[hash] = new Download
+            {
+                From = p.Id, Key = key, Hash = hash, Size = size, Chunks = new byte[count][], LastProgress = Time.unscaledTime,
+                Sign = Time.unscaledTime - joinedAt < 60f || size > 512 * 1024, // joining, or something big: not a slider tweak
+            };
             using var ms = new MemoryStream();
             using var w = new BinaryWriter(ms);
             w.Write(Want); w.Write(key); w.Write(hash);
@@ -421,8 +428,8 @@ public static class Share
         int budget = SendBudget;
         while (budget > 0 && outbox.Count > 0)
         {
-            var (to, key, hash, index) = outbox.Dequeue();
-            if (!mods.TryGetValue(key, out var m) || m.Hash != hash || m.Bytes == null || !peers.ContainsKey(to)) continue;
+            var (to, key, hash, index) = outbox.Peek();
+            if (!mods.TryGetValue(key, out var m) || m.Hash != hash || m.Bytes == null || !peers.ContainsKey(to)) { outbox.Dequeue(); continue; }
             int count = (m.Bytes.Length + ChunkSize - 1) / ChunkSize;
             int start = index * ChunkSize, len = Math.Min(ChunkSize, m.Bytes.Length - start);
             using var ms = new MemoryStream(len + 64);
@@ -430,7 +437,9 @@ public static class Share
             w.Write(Chunk); w.Write(hash); w.Write(index); w.Write(count); w.Write(len);
             w.Write(m.Bytes, start, len);
             w.Flush();
-            Steam.Send(to, ms.GetBuffer(), (int)ms.Length);
+            // Steam refuses when its send buffer is full: keep the piece and try again next frame
+            if (!Steam.Send(to, ms.GetBuffer(), (int)ms.Length)) break;
+            outbox.Dequeue();
             budget -= len;
         }
     }

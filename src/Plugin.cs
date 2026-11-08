@@ -20,7 +20,7 @@ namespace FIHSync;
 [BepInPlugin(Guid, "FIH Sync", Version)]
 public class Plugin : BasePlugin
 {
-    public const string Guid = "com.fabuleo8796.fihsync", Version = "0.1.0";
+    public const string Guid = "com.fabuleo8796.fihsync", Version = "0.1.1";
     internal static ManualLogSource Logger;
 
     internal enum Who { Everyone, FriendsOnly, Nobody }
