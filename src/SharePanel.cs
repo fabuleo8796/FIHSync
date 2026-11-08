@@ -38,7 +38,7 @@ internal static class SharePanel
         if (root == null) Build();
         Ui.EnsureEventSystem();
         fromMenu = menu;
-        if (!menu) { lockWas = Cursor.lockState; cursorWas = Cursor.visible; }
+        if (!menu) { lockWas = Cursor.lockState; cursorWas = Cursor.visible; GameControls.Pause(); } // in game: the mouse moves the cursor, not the camera
         root.SetActive(true);
         Refresh();
     }
@@ -47,12 +47,13 @@ internal static class SharePanel
     {
         if (root == null || !root.activeSelf) return;
         root.SetActive(false);
-        if (!fromMenu) { Cursor.lockState = lockWas; Cursor.visible = cursorWas; }
+        if (!fromMenu) { Cursor.lockState = lockWas; Cursor.visible = cursorWas; GameControls.Resume(); }
     }
 
     internal static void Tick()
     {
         var kb = Keyboard.current;
+        GameControls.Tick(kb, Mouse.current);
         if (kb != null && kb[Plugin.PanelKey.Value].wasPressedThisFrame)
         {
             if (IsOpen) Close(); else Open(PauseButton.MenuOpen);
