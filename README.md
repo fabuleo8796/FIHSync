@@ -9,6 +9,8 @@ Works with:
 |---|---|
 | Flippy Auras 0.2.0+ | your auras around your Flippy |
 | Body Accessories 0.2.1+ | everything you wear, animations and videos too |
+| Cape Editor 1.1.0+ | your custom cape picture (on the base cape you wear) |
+| StickerSwap 1.1.0+ | your custom stickers (on slots that have a game sticker) |
 
 Unmodded players don't notice anything, and you see them as normal.
 
