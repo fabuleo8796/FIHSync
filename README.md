@@ -21,14 +21,14 @@ Unmodded players don't notice anything, and you see them as normal.
 2. Each of you sends what you wear. Each look is downloaded **once** and cached, so meeting again is instant.
 3. Change something mid-game (a new aura, a new export from Blender) and it re-sends by itself.
 4. While other players' files are coming in, a small **"Loading mod textures… 2 of 5"** sign shows top right.
-   **Skip** (or F7) hides it: those players look default until their files land.
+   **Skip** (or F10) hides it: those players look default until their files land.
 5. Files from other players **delete themselves after 3 days** without being used.
 
 It never touches the game's own netcode (FishNet): it's a separate Steam channel next to it.
 
-## Mod sharing (main menu and pause menu)
+## Mod sharing (main menu)
 
-There's a new **Mod sharing** button in the **main menu** and in the pause menu (or press **F8**).
+There's a new green **Mod sharing** button in the **main menu**. In game, press **F9**.
 
 - **See other players' stuff from:** Everyone, Friends only or Nobody.
 - **Videos from:** Everyone, Friends only (the default) or Nobody.
@@ -59,12 +59,12 @@ Other players' files are treated as untrusted:
 | `ShowFrom` | Everyone | `Everyone`, `FriendsOnly` (your Steam friends) or `Nobody` |
 | `ShareMine` | true | let others see yours |
 | `VideosFrom` | FriendsOnly | whose videos play |
-| `LagShield` / `LagShieldMs` | true / 1.5 | hide a player whose stuff costs more than this per frame |
+| `LagShield` / `LagShieldMs` | true / 3 | hide a player whose stuff costs more than this per frame |
 | `MaxMB` | 30 | biggest look you download from someone (videos can be big) |
 | `Blocked` | | Steam IDs you never see (they're in `LogOutput.log`) |
 | `Days` | 3 | how long other players' files stay |
-| `Show` / `SkipKey` | true / F7 | the loading sign |
-| `Panel` | F8 | opens Mod sharing |
+| `Show` / `SkipKey` | true / F10 | the loading sign |
+| `Panel` | F9 | opens Mod sharing (FIH Ultra uses F7 and F8) |
 
 The cache is `BepInEx\cache\FIHSync\`.
 
@@ -100,7 +100,7 @@ try/catch, so your mod still runs without FIH Sync.
 | `src/Share.cs` | The API, hello / want / chunk messages, the cache and expiry |
 | `src/Sign.cs` | The loading sign |
 | `src/SharePanel.cs` | The Mod sharing panel |
-| `src/PauseButton.cs` | Its buttons in the main menu and the pause menu |
+| `src/PauseButton.cs` | Its button in the main menu |
 | `src/Plugin.cs` | Load, config |
 | `src/Ui.cs` | UI pieces (Geist font) |
 

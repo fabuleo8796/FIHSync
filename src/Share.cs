@@ -146,6 +146,8 @@ public static class Share
     static readonly Dictionary<ulong, Peer> peers = new();
     static readonly Dictionary<string, Download> downloads = new(); // by hash
     static readonly Queue<(ulong to, string key, string hash, int index)> outbox = new();
+    static readonly Dictionary<ulong, float> failingSince = new(); // Steam refusing sends to this player since
+    static int lastOwner = int.MinValue;
     static ulong lobby;
     static float nextLobby, nextVersions, nextSweep, nextCost;
     static bool changed;
@@ -213,6 +215,13 @@ public static class Share
     /// Asks each mod whether its look changed, and if so takes the new bytes.
     static void CheckVersions()
     {
+        int owner = LocalOwnerId();
+        if (owner != lastOwner)
+        {
+            lastOwner = owner;
+            changed = true;
+            foreach (var p in peers.Values) p.LastHelloSent = -99f;
+        }
         foreach (var m in mods.Values)
         {
             string v;
@@ -437,8 +446,24 @@ public static class Share
             w.Write(Chunk); w.Write(hash); w.Write(index); w.Write(count); w.Write(len);
             w.Write(m.Bytes, start, len);
             w.Flush();
-            // Steam refuses when its send buffer is full: keep the piece and try again next frame
-            if (!Steam.Send(to, ms.GetBuffer(), (int)ms.Length)) break;
+            // Steam refuses when its send buffer is full: keep the piece and try again next frame. If it keeps
+            // refusing one player for 15 s, drop what's queued for them, so nobody else waits behind them.
+            if (!Steam.Send(to, ms.GetBuffer(), (int)ms.Length))
+            {
+                float now = Time.unscaledTime;
+                if (!failingSince.TryGetValue(to, out var since)) failingSince[to] = now;
+                else if (now - since > 15f)
+                {
+                    failingSince.Remove(to);
+                    var keep = outbox.Where(x => x.to != to).ToList();
+                    outbox.Clear();
+                    foreach (var x in keep) outbox.Enqueue(x);
+                    Plugin.Logger.LogWarning($"Steam kept refusing to send to {Name(to)}: dropped what was queued for them");
+                    continue;
+                }
+                break;
+            }
+            failingSince.Remove(to);
             outbox.Dequeue();
             budget -= len;
         }

@@ -40,12 +40,12 @@ public class Plugin : BasePlugin
         MaxMB = Config.Bind("Sharing", "MaxMB", 30, "Biggest look (in MB) you download from another player. Accessories with videos can be big.");
         VideosFrom = Config.Bind("Sharing", "VideosFrom", Who.FriendsOnly, "Whose video textures play here: Everyone, FriendsOnly or Nobody (videos are the one thing Windows itself decodes).");
         LagShield = Config.Bind("Sharing", "LagShield", true, "Hide a player's stuff when it keeps costing too much frame time.");
-        MaxCostMs = Config.Bind("Sharing", "LagShieldMs", 1.5, "The lag shield's limit: milliseconds per frame for one player's stuff.");
-        PanelKey = Config.Bind("Keys", "Panel", Key.F8, "Opens the Mod sharing panel (it's also a button in the pause menu).");
+        MaxCostMs = Config.Bind("Sharing", "LagShieldMs", 3.0, "The lag shield's limit: milliseconds per frame for one player's stuff.");
+        PanelKey = Config.Bind("Keys", "Panel", Key.F9, "Opens the Mod sharing panel (it's also a button in the main menu). FIH Ultra uses F7 and F8.");
         Blocked = Config.Bind("Sharing", "Blocked", "", "Steam IDs (numbers, separated by commas) whose customizations you never see. Their IDs are in LogOutput.log.");
         CacheDays = Config.Bind("Cache", "Days", 3.0, "Other players' files delete themselves after this many days without being used.");
         ShowSign = Config.Bind("Sign", "Show", true, "Show the \"Loading mod textures\" sign while other players' files come in.");
-        SkipKey = Config.Bind("Sign", "SkipKey", Key.F7, "Hides the loading sign (the default look shows until the files arrive).");
+        SkipKey = Config.Bind("Sign", "SkipKey", Key.F10, "Hides the loading sign (the default look shows until the files arrive).");
         ShowFrom.SettingChanged += Recheck;
         Blocked.SettingChanged += Recheck;
         VideosFrom.SettingChanged += Reload;
