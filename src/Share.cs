@@ -147,6 +147,7 @@ public static class Share
     static readonly Dictionary<string, Download> downloads = new(); // by hash
     static readonly Queue<(ulong to, string key, string hash, int index)> outbox = new();
     static readonly Dictionary<ulong, float> failingSince = new(); // Steam refusing sends to this player since
+    static readonly HashSet<string> tooBig = new(); // looks over the size limit, logged once
     static int lastOwner = int.MinValue;
     static ulong lobby;
     static float nextLobby, nextVersions, nextSweep, nextCost;
@@ -367,23 +368,29 @@ public static class Share
     static void Update(Peer p)
     {
         bool allowed = Allowed(p.Id);
+        // hidden right away only when it's no longer offered or not allowed; a newer version replaces the old look
+        // once it has arrived (the old one stays meanwhile, and stays if the new one is too big or never comes)
         foreach (var key in p.Shown.Keys.ToList())
-            if (!allowed || !p.Offers.TryGetValue(key, out var o) || o.hash != p.Shown[key]) HideFor(p, key);
+            if (!allowed || !p.Offers.ContainsKey(key)) HideFor(p, key);
         if (!allowed || p.OwnerId < 0) return;
         foreach (var offer in p.Offers)
         {
             string key = offer.Key, hash = offer.Value.hash;
             int size = offer.Value.size;
-            if (!mods.TryGetValue(key, out var m) || p.Shown.ContainsKey(key)) continue;
+            if (!mods.TryGetValue(key, out var m) || (p.Shown.TryGetValue(key, out var shown) && shown == hash)) continue;
             var cached = Cache.Get(hash);
             if (cached != null)
             {
-                p.Shown[key] = hash;
+                p.Shown[key] = hash; // the mod's Received replaces that player's old look itself
                 try { m.Received(p.OwnerId, cached, Cache.Folder(hash)); }
                 catch (Exception e) { Plugin.Logger.LogWarning($"'{key}' of {p.Name}: {e.Message}"); }
                 continue;
             }
-            if (size > Plugin.MaxMB.Value * 1024 * 1024) { Plugin.Logger.LogInfo($"'{key}' of {p.Name} skipped: {size / 1048576.0:0.#} MB is over the {Plugin.MaxMB.Value} MB limit"); continue; }
+            if (size > Plugin.MaxMB.Value * 1024 * 1024)
+            {
+                if (tooBig.Add(hash)) Plugin.Logger.LogInfo($"'{key}' of {p.Name} skipped: {size / 1048576.0:0.#} MB is over the {Plugin.MaxMB.Value} MB limit");
+                continue;
+            }
             if (downloads.ContainsKey(hash)) continue;
             int count = Math.Max(1, (size + ChunkSize - 1) / ChunkSize);
             downloads[hash] = new Download
