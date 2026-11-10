@@ -1,4 +1,4 @@
-# FIH Sync (0.1.0 beta)
+# FIH Sync (0.1.2 beta)
 
 Modded players see each other's customizations in Flipping is Hard, automatically. A Flipping is Hard mod (BepInEx 6
 IL2CPP) by Fabuleo8796.
@@ -7,8 +7,8 @@ Works with:
 
 | Mod | What other players see |
 |---|---|
-| Flippy Auras 0.2.0+ | your auras around your Flippy |
-| Body Accessories 0.2.1+ | everything you wear, animations and videos too |
+| Flippy Auras 0.2.1+ | your auras around your Flippy |
+| Body Accessories 0.2.4+ | everything you wear, animations and videos too (videos up to 20 MB in total) |
 | Cape Editor 1.1.0+ | your custom cape picture (on the base cape you wear) |
 | StickerSwap 1.1.0+ | your custom stickers (on slots that have a game sticker) |
 
