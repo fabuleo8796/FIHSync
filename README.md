@@ -3,6 +3,11 @@
 Modded players see each other's customizations in Flipping is Hard, automatically. A Flipping is Hard mod (BepInEx 6
 IL2CPP) by Fabuleo8796.
 
+> **You don't need to install FIH Sync on its own anymore.** It comes inside Body Accessories 0.2.5, Flippy Auras 0.2.2,
+> Cape Editor 1.1.1, StickerSwap 1.1.1 and Tripod Cam 0.5.1 (`FIHSync.dll` in each mod's folder). With several of them
+> installed, BepInEx runs only one copy (the newest). This repo is FIH Sync's code and a standalone download.
+
+
 Works with:
 
 | Mod | What other players see |
